@@ -100,6 +100,91 @@ fcitx5-configtool
 
 
 
+## 配置DrClient开机自动启动
+
+1. DrClientLinux下载
+
+   需要连接JLU.PC的wifi然后必须**关闭梯子**，这样随便打开一个网站，便可以跳转到下载页面，点击下载ubuntu版的即可
+
+
+2. DrClientLinux的开机自动启动
+
+   因为DrClientLinux需要依赖他当前文件夹下的动态库，所以直接用DrClientLinux的autostart是没有用的，因为似乎是在全局下的，默认的搜索路径不包括DrClientLinux的目录，故可以写一个脚本，cd到DrClientLinux所在的目录后再在当前的目录下执行DrClientLinux，这样便可以成功。
+
+3. DrClient的脚本
+
+   ```bash
+   (base) liaohy@liaohyHP:~$ cat /opt/DrClient/DrClient.sh 
+   #!/bin/bash
+   
+   APP_DIR="/opt/DrClient"
+   PROGRAM="./DrClientLinux"
+   LOG_FILE="/opt/DrClient/DrClient.log"
+   
+   
+   # 检查目录
+   if [ ! -d "$APP_DIR" ]; then
+   	echo "Error: Directory $APP_DIR does no exist" | tee -a "$LOG_FILE"
+   	exit 1
+   fi
+   
+   # 切换到指定目录
+   cd "$APP_DIR" || {
+   	echo "Error: Failed to change to directory $APP_DIR" | tee -a "$LOG_FILE"
+   	exit 1
+   }
+   
+   # 检查程序是否可执行
+   if [ ! -x "$PROGRAM" ]; then
+   	echo "Error: $PROGRAM is not executable or does not exist" | tee -a "$LOG_FILE"
+   	exit 1
+   fi
+   
+   # 执行程序并记录日志
+   echo "Starting $PROGRAM at $(date)" >> "$LOG_FILE"
+   "$PROGRAM" >> "$LOG_FILE" 2>&1
+   
+   # 检查程序执行结果
+   if [ $? -eq 0 ]; then
+   	echo "Program $PROGRAM executed successfully" >> "$LOG_FILE"
+   else
+   	echo "Error: Program $PROGRAM failed" >> "$LOG_FILE"
+   	exit 1
+   fi
+   
+   ```
+
+4. 设置开机自动启动
+
+   > 本来我是想通过systemd设置开机自动启动的，但是不知为何使用ai生成的自动启动service总是出现问题，必须我restart一遍才可以启动。
+
+   这是service内容
+
+   ```bash
+   (base) liaohy@liaohyHP:~$ cat /etc/systemd/system/DrClient.service.bak 
+   # Currently in a problem
+   [Unit]
+   Description=DrClient JLU WIFI
+   After=network.target graphical.target
+   
+   [Service]
+   Type=simple
+   ExecStart=/opt/DrClient/DrClient.sh
+   Restart=always
+   User=liaohy
+   WorkingDirectory=/opt/DrClient/
+   StandardOutput=journal
+   StandardError=journal
+   Environment="DISPLAY=:0"  # 替换为实际的 DISPLAY 值
+   ExecStartPre=/bin/sleep 10  # 延迟 10 秒
+   [Install]
+   WantedBy=multi-user.target
+   
+   
+   ```
+
+   目前的自动启动依赖于系统的**Startup Applications**这个应用。设置DrClient.sh的脚本开机自动启。
+
 
 
 
