@@ -171,3 +171,337 @@ sudo apt install gz-harmonic
 sudo apt install ros-jazzy-ros-gz
 ```
 
+## 使用Moveit2的Cpp的API
+
+### 规划组
+
+创建一个规划组对象
+
+```c++
+static const std::string PLANNING_GROUP = "panda_arm";
+moveit::planning_interface::MoveGroupInterface move_group(move_group_node, PLANNING_GROUP);
+```
+
+显示规划组的基坐标系的名称
+
+```c++
+move_group.getPlanningFrame();	//const std::string&
+```
+
+显示末端执行器的名称
+
+```c++
+move_group.getEndEffectorLink();	//const std::string&
+```
+
+显示所有规划组的名称
+
+```c+=
+move_group.getJointModelGroupNames()
+```
+
+规划一个Pose目标
+
+```c++
+// 设置一个Pose点作为目标
+geometry_msgs::msg::Pose target_pose1;
+target_pose1.orientation.w = 1.0;
+target_pose1.position.x = 0.28;
+target_pose1.position.y = -0.2;
+target_pose1.position.z = 0.5;
+move_group.setPoseTarget(target_pose1);
+
+// 判断这点能否规划抵达
+moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+
+bool success = (move_group.plan(my_plan) == moveit::core::MoveItErrorCode::SUCCESS);
+
+RCLCPP_INFO(LOGGER, "Visualizing plan 1 (pose goal) %s", success ? "" : "FAILED");
+// 执行这次规划
+move_group.execute();
+
+// 规划并执行这次路径
+// move_group.move()
+```
+
+规划一个关节的状态空间作为目标
+
+```c++
+moveit::core::RobotStatePtr current_state = move_group.getCurrentState(10);
+
+std::vector<double> joint_group_positions;
+current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+joint_group_positions[0] = -1.0;  // radians	// 设置第一个关节的目标角度
+move_group.setJointValueTarget(joint_group_positions);	// 作为目标进行规划
+
+move_group.setMaxVelocityScalingFactor(0.05);	// 把允许的最大速度降低为最大值的5%。(默认是5%)
+move_group.setMaxAccelerationScalingFactor(0.05);	// 把允许的最大加速度降低为最大值的5%。(默认是5%)
+// 最大值的默认首选是在joint_limits.yaml
+
+success = (move_group.plan(my_plan) == moveit::core::MoveItErrorCode::SUCCESS);
+RCLCPP_INFO(LOGGER, "Visualizing plan 2 (joint space goal) %s", success ? "" : "FAILED");
+```
+
+带有约束条件的规划
+
+```c++
+moveit_msgs::msg::OrientationConstraint ocm;
+ocm.link_name = "panda_link7";	// 约束的目标Link，末端Link
+ocm.header.frame_id = "panda_link0";	// 参考的坐标系，姿态相对于panda_link0定义
+ocm.orientation.w = 1.0;	// 四元数表示的姿态，w=1.0表示无旋转
+ocm.absolute_x_axis_tolerance = 0.1;	// 姿态X轴方向的弧度绝对容差
+ocm.absolute_y_axis_tolerance = 0.1;	// 姿态Y轴方向的弧度绝对容差
+ocm.absolute_z_axis_tolerance = 0.1;	// 姿态Z轴方向的弧度绝对容差
+ocm.weight = 1.0;	// 约束的权重(1.0表示最高优先级)
+
+// Now, set it as the path constraint for the group.
+moveit_msgs::msg::Constraints test_constraints;
+test_constraints.orientation_constraints.push_back(ocm);	//将约束添加到约束集合
+move_group.setPathConstraints(test_constraints);	// 为move_group设置路径约束
+// 这样设置以后的规划都是在这样的约束上，知道解除约束。
+```
+
+解除约束
+
+````c++
+// 解除路径上的约束
+move_group.clearPathConstraints();
+````
+
+使用以笛卡尔路径的规划。
+
+```c++
+// 单个点时可以如下
+auto plan_cartesian = 
+    [&move_group](geometry_msgs::msg::Pose pose) -> std::pair<bool, moveit_msgs::msg::RobotTrajectory> {
+    	moveit_msgs::msg::RobotTrajectory trajectory;
+    	std::vector<geometry_msgs::msg::Pose> poses;
+    	poses.push_back(pose);
+    	bool success = (move_group.computeCartesianPath(poses, 0.1, trajectory) == moveit::core::MoveItErrorCode::SUCCESS);
+    	return make_pair(success,trajectory);
+};
+
+auto [s, j] = plan_cartesian(target_pose1);
+
+// 多个点的规划
+std::vector<geometry_msgs::msg::Pose> waypoints;
+waypoints.push_back(start_pose2);
+
+geometry_msgs::msg::Pose target_pose3 = start_pose2;
+
+target_pose3.position.z -= 0.2;
+waypoints.push_back(target_pose3);  // down
+
+target_pose3.position.y -= 0.2;
+waypoints.push_back(target_pose3);  // right
+
+target_pose3.position.z += 0.2;
+target_pose3.position.y += 0.2;
+target_pose3.position.x -= 0.2;
+waypoints.push_back(target_pose3);  // up and left
+
+// We want the Cartesian path to be interpolated at a resolution of 1 cm,
+// which is why we will specify 0.01 as the max step in Cartesian translation.
+const double eef_step = 0.01;	// 每一步可能的最大路长
+moveit_msgs::msg::RobotTrajectory trajectory;
+double fraction = move_group.computeCartesianPath(waypoints, eef_step, trajectory);	// 返回值为规划的路径完成度百分数
+
+```
+
+设置规划的起始位置
+
+````c++
+// 先设置为初始位置
+moveit::core::RobotState start_state(*move_group.getCurrentState());
+geometry_msgs::msg::Pose start_pose2;
+start_pose2.orientation.w = 1.0;
+start_pose2.position.x = 0.55;
+start_pose2.position.y = -0.05;
+start_pose2.position.z = 0.8;
+start_state.setFromIK(joint_model_group, start_pose2);	// 以初始位置找到离指定姿态的关节空间
+move_group.setStartState(start_state);
+````
+
+
+
+### 场地
+
+创建一个场景对象
+
+```c++
+moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
+```
+
+在场地中添加一个物体对象
+
+```c++
+// Now, let's define a collision object ROS message for the robot to avoid.
+moveit_msgs::msg::CollisionObject collision_object;
+collision_object.header.frame_id = move_group.getPlanningFrame();
+
+// The id of the object is used to identify it.
+collision_object.id = "box1";
+
+// Define a box to add to the world.
+shape_msgs::msg::SolidPrimitive primitive;
+primitive.type = primitive.BOX;
+primitive.dimensions.resize(3);
+primitive.dimensions[primitive.BOX_X] = 0.1;
+primitive.dimensions[primitive.BOX_Y] = 1.5;
+primitive.dimensions[primitive.BOX_Z] = 0.5;
+
+// Define a pose for the box (specified relative to frame_id).
+geometry_msgs::msg::Pose box_pose;
+box_pose.orientation.w = 1.0;
+box_pose.position.x = 0.48;
+box_pose.position.y = 0.0;
+box_pose.position.z = 0.25;
+
+collision_object.primitives.push_back(primitive);
+collision_object.primitive_poses.push_back(box_pose);
+collision_object.operation = collision_object.ADD;
+
+std::vector<moveit_msgs::msg::CollisionObject> collision_objects;
+collision_objects.push_back(collision_object);
+
+// Now, let's add the collision object into the world
+// (using a vector that could contain additional objects)
+RCLCPP_INFO(LOGGER, "Add an object into the world");
+planning_scene_interface.addCollisionObjects(collision_objects);	// 添加了一个长方体
+```
+
+删除物体
+
+````c++
+RCLCPP_INFO(LOGGER, "Remove the objects from the world");
+std::vector<std::string> object_ids;
+object_ids.push_back(collision_object.id);
+planning_scene_interface.removeCollisionObjects(object_ids);
+````
+
+
+
+给末端添加一个拾取物体
+
+```c++
+moveit_msgs::msg::CollisionObject object_to_attach;
+object_to_attach.id = "cylinder1";
+
+shape_msgs::msg::SolidPrimitive cylinder_primitive;
+cylinder_primitive.type = primitive.CYLINDER;
+cylinder_primitive.dimensions.resize(2);
+cylinder_primitive.dimensions[primitive.CYLINDER_HEIGHT] = 0.20;
+cylinder_primitive.dimensions[primitive.CYLINDER_RADIUS] = 0.04;
+
+// We define the frame/pose for this cylinder so that it appears in the gripper.
+object_to_attach.header.frame_id = move_group.getEndEffectorLink();	// 坐标系选择末端坐标系
+geometry_msgs::msg::Pose grab_pose;
+grab_pose.orientation.w = 1.0;
+grab_pose.position.z = 0.2;
+
+// First, we add the object to the world (without using a vector).
+object_to_attach.primitives.push_back(cylinder_primitive);
+object_to_attach.primitive_poses.push_back(grab_pose);
+object_to_attach.operation = object_to_attach.ADD;
+planning_scene_interface.applyCollisionObject(object_to_attach);
+
+// Then, we "attach" the object to the robot. It uses the frame_id to determine which robot link it is attached to.
+// We also need to tell MoveIt that the object is allowed to be in collision with the finger links of the gripper.
+// You could also use applyAttachedCollisionObject to attach an object to the robot directly.
+RCLCPP_INFO(LOGGER, "Attach the object to the robot");
+std::vector<std::string> touch_links;
+touch_links.push_back("panda_rightfinger");
+touch_links.push_back("panda_leftfinger");
+move_group.attachObject(object_to_attach.id, "panda_hand", touch_links);	// 末端添加的物体可以和末端Link发生碰撞
+```
+
+删除拾取物体
+
+````c++
+// 从末端取下物体
+RCLCPP_INFO(LOGGER, "Detach the object from the robot");
+move_group.detachObject(object_to_attach.id);
+
+// 从世界中删除物体
+RCLCPP_INFO(LOGGER, "Remove the objects from the world");
+std::vector<std::string> object_ids;
+object_ids.push_back(object_to_attach.id);
+planning_scene_interface.removeCollisionObjects(object_ids);
+````
+
+
+
+### 可视化
+
+创建rviz可视化tool
+
+```c++
+namespace rvt = rviz_visual_tools;
+moveit_visual_tools::MoveItVisualTools visual_tools(move_group_node, "panda_link0", "move_group_tutorial", move_group.getRobotModel());
+
+visual_tools.deleteAllMarkers();
+visual_tools.loadRemoteControl();
+```
+
+`rviz`可视化显示文字
+
+```c++
+auto const draw_title = [&visual_tools](auto text) {
+	auto const text_pose = [] {
+  		auto msg = Eigen::Isometry3d::Identity();
+  		msg.translation().z() = 1.0;
+  		return msg;
+	}();
+	visual_tools.publishText(text_pose, text, rviz_visual_tools::WHITE, rviz_visual_tools::XLARGE);
+};
+draw_title("")	//便可以可视化显示文字
+```
+
+`bash`中提示文字，按压`next`继续。
+
+```c++
+auto const prompt = [&visual_tools](auto text) {
+	visual_tools.prompt(text);
+};
+prompt("")
+```
+
+`rviz`中显示轨迹
+
+```c++
+// 规划一条轨迹
+auto const [success, plan] = [&move_group]{
+    moveit::planning_interface::MoveGroupInterface::Plan msg;
+    auto const ok = static_cast<bool>(move_group.plan(msg));
+    return std::make_pair(ok, msg);
+}();
+// 显示这条轨迹
+auto const draw_trajectory_tool_path = 
+	[&visual_tools,
+	jmg = move_group.getRobotModel()->getJointModelGroup("panda_arm")]
+	(auto const trajectory) {
+		visual_tools.publishTrajectoryLine(trajectory, jmg);
+};
+
+draw_trajectory_tool_path(plan.trajectory);
+```
+
+发送到`rviz`中
+
+```c++
+visual_tools.trigger();
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
