@@ -187,6 +187,55 @@ fcitx5-configtool
 
 
 
+## 安装lazyvim
+
+> 要保证nvim的版本在0.10.0以上。否则某些lazyvim的功能会支持不完全。
+
+### 安装nvim
+
+使用apt安装nvim的二进制包
+
+如果直接安装二进制包，nvim的版本是比0.10.0低的（linux-mint22.1下），要获得高版本的nvim二进制包，可以加入nvim的unstable源
+
+```bash
+sudo add-apt-repository ppa:neovim-ppa/unstable
+```
+
+这样便可以下载高版本的nvim了，便可以安装lazyvim了。
+
+### 下载lazyvim
+
+```bash
+# required
+mv ~/.config/nvim{,.bak}
+
+# optional but recommended
+mv ~/.local/share/nvim{,.bak}
+mv ~/.local/state/nvim{,.bak}
+mv ~/.cache/nvim{,.bak}
+```
+
+```bash
+git clone https://github.com/LazyVim/starter ~/.config/nvim
+```
+
+```bash
+rm -rf ~/.config/nvim/.git
+```
+
+### 安装`nerd fonts`
+
+下载`Nerd Fonts`，然后选择`JetBrainsMono Nerd Font`安装。解压后
+
+````bash
+# cd到解压后的目录中
+sudo cp ./*.ttf /usr/share/fonts/
+# 更新缓存
+sudo fc-cache -fv
+````
+
+然后在终端的设置中选择`jetBrainsMono Nerd Font`，选择完后字体间距异常的话，重启终端即可。
+
 ## ros2的安装
 
 > ros2在linux-mint的安装参考ubuntu一样
@@ -388,3 +437,47 @@ conda activate ros2_work
 pip install colcon-common-extensions
 ````
 
+## 安装matlab2025a
+
+> 来自官方安装方法
+
+> 本方法只测试过matlab2025a（截至我写的时候最高的），其他更低版本在linux上非xfce的桌面环境下都有点问题。还需更多操作。
+
+To install MATLAB on Linux:
+
+1. From [MathWorks Downloads](https://www.mathworks.com/downloads/), select a MATLAB release and download the installer.
+
+2. Unzip the downloaded installer files and navigate to the unzipped folder. For example, use these commands to unzip the installer for release `R2025a` to a folder of the same name, and then navigate to the folder.
+
+   ```shell
+   unzip matlab_R2025a_Linux.zip -d ./matlab_R2025a_Linux
+   cd ./matlab_R2025a_Linux
+   ```
+
+3. In the installation folder, run the `install` script and follow the prompts to complete the installation.
+
+   > `xhost +SI:localuser:root`整体含义
+   >
+   > - 该命令允许本地的 root 用户通过 X 服务器运行图形界面的应用程序。例如，当以 root 用户身份运行需要显示图形界面的程序（如 gksu 或某些图形化配置工具）时，X 服务器需要明确授权 root 用户访问当前的显示服务器。
+   > - 默认情况下，X 服务器可能只允许当前登录的用户访问图形界面，root 用户可能被拒绝访问（出于安全考虑）。运行 xhost +SI:localuser:root 可以临时授予 root 用户访问权限。
+   >
+   > `sudo -H`具体含义
+   >
+   > - **默认行为**：当你运行 sudo command 时，sudo 会保留当前用户的 HOME 环境变量（例如，普通用户的 /home/username）。这可能导致问题，因为某些程序会尝试在当前用户的家目录中读取或写入配置文件，而 root 用户可能没有权限访问普通用户的家目录，或者你不希望 root 操作普通用户的配置文件。
+   > - **-H 选项的作用**：sudo -H 明确地将 HOME 环境变量设置为目标用户的家目录（例如，/root 对于 root 用户），确保命令以目标用户的家目录为上下文运行。
+
+   ```shell
+   xhost +SI:localuser:root
+   sudo -H ./install
+   xhost -SI:localuser:root
+   ```
+
+   `sudo` is required only when you install products to a folder where you do not have write permissions, which might include the default installation folder. The `xhost` commands are required only when you install products as the root user with `sudo`. These commands temporarily give the root user access to the graphical display required to run the installer.
+
+   Default installation folder: `/usr/local/MATLAB/R20XXy`
+
+To start MATLAB after the installation is complete, see [Start MATLAB on Linux Platforms](https://www.mathworks.com/help/matlab/matlab_env/start-matlab-on-linux-platforms.html) (MATLAB).
+
+安装完后如果发现有matlab打开有异常，重启电脑可能能解决（本人是这样的）
+
+目前似乎有点bug是`matlab2025a`无法使用`fcitx5`，不清楚是`matlab2025a`的bug还是，`fcitx5`的bug，还是`linux-mint22.1`的bug。

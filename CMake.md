@@ -352,5 +352,198 @@ install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 cmake --install . --prefix=/usr/local # 将${CMAKE_INSTALL_PREFIX}设置为/usr/local
 ```
 
+## 测试支持
+
+开启测试使用函数`enable_testing()`
+
+添加一个测试使用函数`add_test()`，基本用法如下。
+
+```markdown
+add_test(NAME <name> COMMAND <command> [<arg>...]
+         [CONFIGURATIONS <config>...]
+         [WORKING_DIRECTORY <dir>]
+         [COMMAND_EXPAND_LISTS])
+```
+
+example:
+
+```cmake
+add_test(NAME Runs COMMAND git --version)
+```
+
+## 系统检测
+
+需要使用系统检测要先引入`CheckCXXSourceCompiles`模块
+
+`````cmake
+inlcude(CheckCXXSourceCompiles)
+`````
+
+引入模块后，便可以使用`check_cxx_source_compiles`函数了。其用法为。
+
+```markdown
+check_cxx_source_compiles(<code> <resultVar>
+                          [FAIL_REGEX <regex1> [<regex2>...]])
+```
+
+example:
+
+```cmake
+check_cxx_source_compiles("
+#include <cmath>
+int main() {
+	std::exp(1.0);
+	return 0;
+}
+" HAVE_EXP)
+```
+
+其为检测前面一段代码是否能过编译，如果能过编译则`HAVE_EXP`为`TRUE`，如果无法过编译则`HAVE_EXP`为`FALSE`。
+
+然后可以使用`target_compile_definitions()`来控制宏定义是否定义，进而代码中判断是否使用相关特性。
+
+example:
+
+```cmake
+# target_compile_definitions(<target> <INTERFACE|PUBLIC|PRIVATE> [item1 ...])
+target_compile_definitions(${PROJECT_NAME} PRIVATE "HAVE_EXP")
+```
+
+在cpp文件里就可以使用
+
+```c++
+#ifdef HAVE_EXP
+...
+#else
+...
+#endif
+```
+
+## 自定义命令
+
+使用`add_custom_command`函数可以使用自定义命令。常用用法如下。example:
+
+```cmake
+add_cusotm_command(
+	OUTPUT ${CMAKE_SOURCE_DIR}
+	COMMAND	${PROJECT_NAME}
+	DEPENDS ${PROJEC_NAME}
+)
+```
+
+上述用法表示，输出目录为`${CMAKE_SOURCE_DIR}`，执行的命令为`${PROJECT_NAME}`，执行的依赖是`${PROJECT_NAME}`。
+
+## 打包程序
+
+使用`cli`命令`cpack`来进行打包
+
+首先在`CMakeLists.txt`末尾添加以下几段代码
+
+```cmake
+include(InstallRequiredSystemLibraries)
+set(CPACK_RESOURCES_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/License.txt") # 可选 License
+set(CPACK_PACKAGE_VERSION_MAJOR "${Tutorial_VERSION_MAJOR}") # 可选 版本号
+set(CPACK_PACKAGE_VERSION_MINOR "${Tutorial_VERSION_MINOR}") # 可选 版本号
+set(CPACK_SOURCE_GENERATOR "TGZ") # 指定源码的打包方式为.tar.gz
+include(CPack)
+```
+
+可以使用`cpack --help`来查看支持的打包方式
+
+```bash
+(base) liaohy@liaohyHP:~$ cpack --help
+Usage
+
+  cpack [options]
+
+Options
+  -G <generators>              = Override/define CPACK_GENERATOR
+  -C <Configuration>           = Specify the project configuration
+  -D <var>=<value>             = Set a CPack variable.
+  --config <configFile>        = Specify the config file.
+  -V,--verbose                 = Enable verbose output
+  --trace                      = Put underlying cmake scripts in trace mode.
+  --trace-expand               = Put underlying cmake scripts in expanded
+                                 trace mode.
+  --debug                      = Enable debug output (for CPack developers)
+  -P <packageName>             = Override/define CPACK_PACKAGE_NAME
+  -R <packageVersion>          = Override/define CPACK_PACKAGE_VERSION
+  -B <packageDirectory>        = Override/define CPACK_PACKAGE_DIRECTORY
+  --vendor <vendorName>        = Override/define CPACK_PACKAGE_VENDOR
+  --preset                     = Read arguments from a package preset
+  --list-presets               = List available package presets
+  -h,-H,--help,-help,-usage,/? = Print usage information and exit.
+  --version,-version,/V [<file>]
+                               = Print version number and exit.
+  --help <keyword> [<file>]    = Print help for one keyword and exit.
+  --help-full [<file>]         = Print all help manuals and exit.
+  --help-manual <man> [<file>] = Print one help manual and exit.
+  --help-manual-list [<file>]  = List help manuals available and exit.
+  --help-command <cmd> [<file>]= Print help for one command and exit.
+  --help-command-list [<file>] = List commands with help available and exit.
+  --help-commands [<file>]     = Print cmake-commands manual and exit.
+  --help-module <mod> [<file>] = Print help for one module and exit.
+  --help-module-list [<file>]  = List modules with help available and exit.
+  --help-modules [<file>]      = Print cmake-modules manual and exit.
+  --help-policy <cmp> [<file>] = Print help for one policy and exit.
+  --help-policy-list [<file>]  = List policies with help available and exit.
+  --help-policies [<file>]     = Print cmake-policies manual and exit.
+  --help-property <prop> [<file>]
+                               = Print help for one property and exit.
+  --help-property-list [<file>]= List properties with help available and
+                                 exit.
+  --help-properties [<file>]   = Print cmake-properties manual and exit.
+  --help-variable var [<file>] = Print help for one variable and exit.
+  --help-variable-list [<file>]= List variables with help available and exit.
+  --help-variables [<file>]    = Print cmake-variables manual and exit.
+
+Generators
+  7Z                           = 7-Zip file format
+  DEB                          = Debian packages
+  External                     = CPack External packages
+  IFW                          = Qt Installer Framework
+  NSIS                         = Null Soft Installer
+  NSIS64                       = Null Soft Installer (64-bit)
+  NuGet                        = NuGet packages
+  RPM                          = RPM packages
+  STGZ                         = Self extracting Tar GZip compression
+  TBZ2                         = Tar BZip2 compression
+  TGZ                          = Tar GZip compression
+  TXZ                          = Tar XZ compression
+  TZ                           = Tar Compress compression
+  TZST                         = Tar Zstandard compression
+  ZIP                          = ZIP file format
 
 
+```
+
+在`windows`上默认的打包方式是`NSIS`，需要下载软件`NSIS`方可执行打包。
+
+打包前需先配置好`CMake`。
+
+````bash
+# 配置CMake
+cmake ..
+# 打包 --使用默认方式
+cpack
+# 也可手动指定打包的方式
+cpack -G ZIP
+# 也可进行源码打包
+cpack --config CPackSourceConfig.cmake
+````
+
+使用`cpack`打包的内容为`install`的内容，就是将`install`要安装的内容安装进入`cpack`指定的打包格式中。
+
+## 再识库
+
+在使用`add_library`函数 指定`STATIC`可以生成静态库，而指定`SHARED`可以生成静态库。
+
+而如果缺省一般默认生成的是静态库。
+
+可以通过指定`option`变量`BUILD_SHARED_LIBS`是否为`ON`和`OFF`，可以改变缺省后的默认行为。如果为`ON`则缺省后默认生成的为动态库。
+
+更改`${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}`和`${CMAKE_RUNTIME_OUTPUT_DIRECTORY}`和`${CMAKE_LIBRARY_OUTPUT_DIRECTORY}`可以改变库文件生成的路径
+
+- `${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}`为`.a`和`.lib`的生成路径
+- `${CMAKE_RUNTIME_OUTPUT_DIRECTORY}`为``.dll`和`.exe`的生成路径
+- `${CMAKE_LIBRARY_OUTPUT_DIRECTORY}`为`.so`的生成路径

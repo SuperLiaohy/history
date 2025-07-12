@@ -493,11 +493,19 @@ draw_trajectory_tool_path(plan.trajectory);
 visual_tools.trigger();
 ```
 
+## 大致信息流
+
+如果直接使用信息流的话，就是将反馈信息发给`/joint_state`话题，然后`moveit`将会以其从`/joint_state`获得的数据作为规划的`start_state`，但是如果自己手动设置过`start_state`的话，那么下一次规划会以这次手动设置过的`start_state`作为起点。
 
 
 
+## 初步的Ros2_Control
 
+最小配置如下（官网说的）：
 
+1. 一个yaml配置文件，告诉Moveit哪些控制器可用，哪些关节和控制器的关联，以及Moveit控制器接口类型。
+2. 一个启动文件Launch文件，这个启动文件必须加载`moveit_controllers`yaml文件并指定`moveit_simple_controller_manager/MoveItSimpleControllerManager`。加载这些yaml文件后，他们将作为参数传递到MoveGroup节点。
+3. 启动相应的 `ros2_control` JointTrajectoryControllers。这与 MoveIt 2 生态系统是分开的。[ 启动 ros2_control 示例 ](https://github.com/ros-controls/ros2_control_demos)。每个 JointTrajectoryController 都提供了一个 action 接口。给定上面的 yaml 文件，MoveIt 会自动连接到这个动作接口。
 
 
 
